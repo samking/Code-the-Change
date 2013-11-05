@@ -1,0 +1,14 @@
+name = Theme Editor IDE
+description = 'Adds IDE (Integrated Development Environment) code editor to the Theme Editor Interface'
+package = Theme Editor
+
+core = 7.x
+
+dependencies[] = theme_editor
+dependencies[] = libraries
+; Information added by drupal.org packaging script on 2012-02-15
+version = "7.x-2.x-dev"
+core = "7.x"
+project = "theme_editor"
+datestamp = "1329266278"
+

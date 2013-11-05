@@ -1,0 +1,15 @@
+#te_perms tr.region-title td {
+  font-weight: bold;
+}
+#te_perms tr.region-message {
+  font-weight: normal;
+  color: #999;
+}
+#te_perms tr.region-populated {
+  display: none;
+}
+
+#te_perms td.perm div.form-type-select,
+#te_perms td.perm span.warning {
+  float: left;
+}

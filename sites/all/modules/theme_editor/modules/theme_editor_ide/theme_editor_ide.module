@@ -1,0 +1,19 @@
+<?php
+/**
+ * @file Hooks and required functions for module implementation
+ */
+
+/**
+* Implements hook_theme_editor_file_editor().
+*/
+function theme_editor_ide_theme_editor_file_editor_info() {
+  $base = array(
+    'callback' => 'theme_editor_ide_codemonkey',
+    'file' => 'theme_editor_ide.codemonkey.inc',
+    'path' => drupal_get_path('module', 'theme_editor_ide') . '/editors'  
+  );
+  return array(
+    'text/*' => $base,
+    
+  );
+}

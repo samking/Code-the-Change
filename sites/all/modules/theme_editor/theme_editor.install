@@ -1,0 +1,293 @@
+<?php
+/**
+ * @file Install, Uninstall, Schema, and Update hooks for Theme Editor.
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function theme_editor_schema() {
+  $schema['theme_editor_files'] = array(
+    'description' => 'All files associated with a theme editor theme',
+    'fields' => array(
+      'fid' => array(
+        'description' => 'Unique ID of the file',
+        'type' => 'serial',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+      ),
+      'vid' => array(
+        'description' => 'the current Version ID of the file',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The filename of the stored file',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'path' => array(
+        'description' => 'The path within the theme of the stored file',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'mime' => array(
+        'description' => 'The mime type of the stored file',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'theme' => array(
+        'description' => 'The theme name of the stored file',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that created the initial file.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'UNIX timestamp for when the file was added.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'UNIX timestamp for when the file was changed.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'status' => array(
+        'description' => 'Boolean indicating whether or not the file is in the theme editor filesystem.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'theme' => array('theme'),
+      'name' => array('name'),
+      'fid' => array('fid'),
+      'vid' => array('vid'),
+    ),
+    'primary key' => array('fid'),
+  ); 
+  $schema['theme_editor_files_versions'] = array(
+    'description' => 'The files that Theme Editor has edited',
+    'fields' => array(
+      'fid' => array(
+        'description' => 'The {theme_editor_files}.fid that this version belongs to.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'vid' => array(
+        'description' => 'Version ID of the file',
+        'type' => 'serial',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'The filename of the stored file',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'theme' => array(
+        'description' => 'The theme name of the stored file',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that created this version.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'timestamp' => array(
+        'description' => 'UNIX timestamp for when the file was added.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'log' => array(
+        'description' => 'The log entry explaining the changes in this version.',
+        'type' => 'text',
+        'size' => 'big',
+      ),
+      'data' => array(
+        'description' => 'A collection of data to cache.',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'size' => 'big',
+      ),
+      'base64' => array(
+        'description' => 'Boolean indicating whether or not the file data is base64.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'theme' => array('theme'),
+      'name' => array('name'),
+      'fid' => array('fid'),
+      'uid' => array('uid'),
+      'vid' => array('vid'),
+    ),
+    'primary key' => array('vid'),
+  );
+  
+  $schema['theme_editor_themes'] = array(
+    'description' => 'Themes that theme editor has a copy of and weather or not that copy is active.',
+    'fields' => array(
+      'name' => array(
+        'description' => 'The name of the theme.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'Boolean indicating whether or not this item is enabled.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' > array(
+      'status' => array('status')
+    ),
+    'primary key' => array('name'),
+  );
+  /*
+  $schema['theme_editor_access'] = array(
+    'description' => 'List of grants for a files and themes',
+  );
+   */
+  $schema['theme_editor_file_access_rights'] = array(
+    'description' =>  'List of file permissions for the themes and global theme_editor',
+    'fields' => array(
+      'rid' => array(
+        'description' => 'The rights id unqique for each right',
+        'type' => 'serial',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+      ),
+      'theme' => array(
+        'description' => 'The name of the theme the right is tied to or NULL for a global/default right.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'mime' => array(
+        'description' => 'The mime type the permission belongs to',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'weight' => array(
+        'description' => 'Weight of the right.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'create_op' => array( //It's retarded that we have to do this, but create and delete are reserved words in some SQL
+        'description' => 'Boolean indicating whether or not this right grants the create op.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'edit_op' => array(
+        'description' => 'Boolean indicating whether or not this right grants the edit op.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'delete_op' => array(
+        'description' => 'Boolean indicating whether or not this right grants the delete op.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'check_type' => array(
+        'description' => 'The type of check that is used. Generally one of Role(role), Permission(perm), User(user), or PHP(php).',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'arg' => array(
+        'description' => 'The data to used in the check type.',
+        'type' => 'text',
+        'size' => 'big',
+      ),
+    ),
+    'indexes' > array(
+      'theme' => array('theme'),
+      'mime'  => array('mime'),
+      'create' => array('create'),
+      'edit' => array('edit'),
+      'delete' => array('delete'),
+    ),
+    'primary key' => array('rid'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function theme_editor_install() { 
+  //Placeholder in case any actions are needed
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function theme_editor_uninstall() { 
+  //db_delete('variable')->condition('name', 'theme_editor%', 'LIKE')->execute();
+  module_load_include('module','theme_editor');
+  theme_editor_rmdir(THEME_EDITOR_DIR, TRUE);
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function theme_editor_requirements($phase) {
+  $req = array();
+  // Ensure translations don't break at install time
+  $t = get_t();
+  
+  if ($phase == 'runtime') {
+    if (!THEME_EDITOR_DIR) {
+      $sev = REQUIREMENT_ERROR;
+      $desc = $t('Private File Directory not set. Please vist the !link page to correct.', array('!link' => l('file system configuration', 'admin/config/media/file-system')));
+      $req['private_file'] = array(
+        'title' => $t('Theme Editor'),
+        'value' => $t('Not set!'),
+        'description' => $desc,
+        'severity' => $sev,
+      );
+    } 
+  }
+  return $req;
+}
+
+/**
+* Implements hook_enable().
+*/
+function theme_editor_enable() { 
+  _theme_editor_rebuild_theme_data();
+}

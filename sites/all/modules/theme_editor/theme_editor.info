@@ -1,0 +1,27 @@
+name =  Theme Editor
+description = Provides the ability to edit any installed themes without needing to overwrite any of the theme data.
+package = Theme Editor
+core = 7.x
+
+dependencies[] = views
+
+
+files[] = theme_editor.admin.inc
+files[] = theme_editor.actions.inc
+files[] = theme_editor.pages.inc
+files[] = theme_editor.install
+files[] = theme_editor.module
+
+; Views Handlers
+files[] = views/handlers/views_handler_field_theme_editor_file.inc
+files[] = views/handlers/views_handler_field_theme_editor_theme.inc
+files[] = views/handlers/views_handler_field_theme_editor_mime_type.inc
+files[] = views/handlers/views_handler_field_theme_editor_file_link.inc
+files[] = views/handlers/views_handler_field_theme_editor_file_revert_link.inc
+files[] = views/handlers/views_handler_field_theme_editor_file_delete_link.inc
+; Information added by drupal.org packaging script on 2012-02-15
+version = "7.x-2.x-dev"
+core = "7.x"
+project = "theme_editor"
+datestamp = "1329266278"
+

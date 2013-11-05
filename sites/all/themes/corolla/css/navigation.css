@@ -1,0 +1,300 @@
+/* CSS for major navigation elements such as menus, pager, superfish etc */
+a {
+  text-decoration: none;
+}
+
+/* Menus */
+ul.menu {
+  list-style-position: inside;
+  margin: 4px 0;
+  padding: 0;
+}
+ul.menu li {
+  margin: 2px 0;
+  padding: 0;
+}
+ul.menu ul {
+  margin-left: 15px;
+}
+.block .menu li.content {
+  padding: 0; /* extra class can equal a standard class */
+}
+
+/* Pager */
+.item-list ul.pager {
+  margin: 15px 0 2px 0;
+  text-align: left;
+}
+.item-list ul.pager li {
+  margin: 0 6px;
+  padding: 0;
+}
+ul.pager li:first-child {
+  margin: 0 6px 0 0; /* LTR */
+}
+ul.pager li.pager-previous {
+  padding-right: 8px;
+}
+ul.pager li.pager-next {
+  padding-left: 8px;
+}
+ul.pager li.pager-ellipsis {
+  margin: 0;
+}
+
+/* Breadcrumbs */
+#breadcrumb-wrapper {
+  margin: 0 0 10px 0;
+}
+#breadcrumb-wrapper .separator {
+  margin: 0 5px;
+}
+.breadcrumb {
+  padding: 0;
+  margin: 0;
+}
+.breadcrumb ol {
+  margin: 0;
+  padding: 0;
+}
+.breadcrumb ol li {
+  list-style: none;
+  display: inline;
+}
+
+/* Superfish */
+ul.sf-menu li ul {
+  display: none; /* Prevent sub menus from momentarily displaying */
+}
+.sf-menu {
+  margin-bottom: 0;
+  height: 30px;
+  line-height: 30px;
+}
+.sf-menu a {
+  border-left: 0;
+  border-top: 0;
+  padding: 0;
+  text-decoration: none;
+}
+.sf-menu > li > a:link,
+.sf-menu > li > a,
+.sf-menu > li > a:visited  {}
+.sf-menu li {
+  background: transparent;
+}
+.sf-menu li:hover,
+.sf-menu li.sfHover,
+.sf-menu a:focus,
+.sf-menu a:hover,
+.sf-menu a:active {
+  outline: 0;
+}
+.menu-wrapper .block-superfish .block-inner,
+.menu-wrapper .block-superfish .block-inner .content,
+.region-header .block-superfish .block-inner,
+.region-header .block-superfish .block-inner .content {
+  padding: 0;
+  margin: 0;
+}
+.block-superfish ul,
+.block-superfish ul ul,
+.block-superfish ul ul ul,
+.block-superfish ul ul ul ul,
+.block-superfish li {
+  margin: 0;
+  padding: 0;
+}
+.sf-vertical,
+.sf-vertical li {
+  width: 100%;
+}
+.sf-vertical li {
+  border-bottom: 1px solid #fff;
+}
+.sf-vertical li.last {
+  border-bottom: none;
+}
+.sf-vertical li:hover ul,
+.sf-vertical li.sfHover ul {
+  left: 100%; /* match ul width */
+  top:  0;
+  margin: 0;
+  padding: 0;
+}
+.sf-vertical li a {
+  padding: 0 10px;
+}
+.sf-navbar {
+  padding-bottom: 0 !important;
+}
+
+/* Corolla supports Superfish drop menus in two regions - Menu bar and the Header panel,
+   and we need to support standard menu blocks as well. */
+#menu-bar-wrapper {
+  position: relative;
+  z-index: 10;
+}
+#menu-bar-wrapper,
+#menu-bar {
+  height: 3em;
+}
+#menu-bar {
+  padding: 0 15px;
+  font-size: 0.923em;
+}
+#menu-bar .block ,
+#menu-bar ul,
+#menu-bar ul li {
+  margin: 0;
+  padding: 0;
+}
+#menu-bar .menu-wrapper > ul > li {
+  display: inline-block;
+  margin: 0.333em 0 0;
+  padding-left: 0;
+}
+#menu-bar ul > li > a {
+  color: #fff;
+  display: block;
+  line-height: 1;
+  padding: 0.833em 20px 1.083em;
+}
+#menu-bar .sf-horizontal.sf-style-none li ul {
+  opacity: .95;
+}
+#menu-bar ul li ul a {
+  -moz-border-radius: 0;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+}
+#menu-bar .menu-wrapper > ul > li > ul {
+  margin-top: 0.417em;
+}
+
+#menu-bar .block-menu ul ul {
+  display: none;
+}
+
+/* Region header Superfish */
+.region-header .sf-horizontal.sf-style-none,
+.region-header ul.menu {
+  text-transform: uppercase;
+}
+.region-header .sf-horizontal.sf-style-none li,
+.region-header ul.menu li {
+  margin: 0 2px !important;
+  padding: 0;
+}
+.region-header ul.menu li {
+  float: left;
+}
+.region-header .sf-horizontal.sf-style-none li  a,
+.region-header ul.menu li a {
+  padding: 0 8px;
+  height: 2em;
+  line-height: 2em;
+  display: block;
+}
+.region-header .sf-horizontal.sf-style-none > li > ul a,
+.region-header ul.menu > li > ul a {
+  border-bottom: none;
+}
+.region-header .sf-horizontal.sf-style-none li ul,
+.region-header .sf-horizontal.sf-style-none li ul li {
+  margin: 0;
+  padding: 0;
+}
+.region-header .sf-horizontal.sf-style-none > li > ul {
+  margin-top: -0.231em !important;
+}
+
+/* Skin link */
+#skip-link {
+  left: 50%;
+  margin-left: -6.5em;
+  margin-top: 0;
+  padding: 0 0.5em;
+  position: absolute;
+  width: 12em;
+  z-index: 50;
+}
+#skip-link a,
+#skip-link a:link,
+#skip-link a:visited {
+  background: #444;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  display: block;
+  line-height: 2;
+  padding: 0;
+  text-align: center;
+  text-decoration: none;
+  -khtml-border-radius: 0 0 10px 10px;
+  -moz-border-radius: 0 0 10px 10px;
+  -webkit-border-top-left-radius: 0;
+  -webkit-border-top-right-radius: 0;
+  -webkit-border-bottom-left-radius: 10px;
+  -webkit-border-bottom-right-radius: 10px;
+  border-radius: 0 0 10px 10px;
+}
+#skip-link a:hover,
+#skip-link a:active,
+#skip-link a:focus {
+  outline: 0;
+}
+
+/* Tasks - Primary/Secondary/Action links */
+#tasks {
+  margin: 0 20px -1px;
+}
+ul.primary {
+  border-bottom-color: none;
+  margin: 0;
+  padding: 0 0 .2em;
+}
+ul.primary li a {
+  background-color: #f5f5f5;
+  margin-right: .08em;
+  border-color: #e1e1e1;
+  line-height: 1.7;
+  padding: 0.4em 1em 0.43em;
+  -moz-border-radius: 6px 6px 0 0;
+  border-radius: 6px 6px 0 0;
+}
+.local-tasks ul.primary li a:hover {
+  background-color: #f7f7f7;
+  border-color: #ccc;
+}
+ul.primary li.active a {
+  border-color: #e1e1e1 #e1e1e1 #fff;
+}
+
+ul.secondary {
+  border-bottom: 1px solid #e1e1e1;
+  margin: 0;
+  padding: 0 .3em 1em;
+}
+ul.secondary li {
+  border-right: 0;
+  list-style: none;
+  padding: 0 2em 0 0;
+}
+ul.secondary li a:hover,
+ul.secondary li a.active {
+  border-bottom: none;
+  text-decoration: underline;
+}
+
+ul.action-links {
+  margin: 10px 0;
+}
+ul.action-links li {
+  list-style: none;
+  display: inline;
+  padding: 0 14px 0 1px;
+}
+ul.action-links li a {
+  padding-left: 15px;
+  background: url(images/action-link.png) no-repeat left center;
+}

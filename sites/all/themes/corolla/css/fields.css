@@ -1,0 +1,48 @@
+/* Fields */
+.field .field-label {
+  font-size: 1em;
+  font-weight: 700;
+  line-height: inherit;
+  margin: 0;
+}
+.field-lable-inline .field-label {
+  display: inline;
+}
+.field-type-taxonomy-term-reference .field-label {
+  font-size: 1em;
+}
+.field-type-taxonomy-term-reference ul {
+  margin: 0;
+  padding: 0;
+}
+.field-type-taxonomy-term-reference ul li {
+  display: inline;
+  list-style: none;
+  padding: 0 .75em 0 0;
+}
+.field-label-inline .field-label,
+.field-label-inline .field-items {
+  display: inline;
+}
+.field-type-image figure {}
+.field-type-image figure,
+.field-type-image figcaption {
+  margin: 0;
+  padding: 0;
+}
+.field-type-image figure img {
+  margin: auto;
+  padding: 2px;
+  text-align: center;
+}
+.field-type-image figcaption {
+  font-size: 0.823em;
+  font-style: italic;
+  margin: auto;
+  max-width: 75%;
+  text-align: center;
+}
+tabel .field-type-image img {
+  width: 100%;
+  height: auto;
+}

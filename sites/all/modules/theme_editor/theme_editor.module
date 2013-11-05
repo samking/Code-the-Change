@@ -1,0 +1,1084 @@
+<?php
+/**
+ * @file Theme Editor hooks and mandatory functions
+ * 
+ * @todo - Write valid functionality for theme_editor_access_theme.
+ */
+
+/**
+ * The directory that the theme editor themes reside in
+ */
+define('THEME_EDITOR_DIR', _te_vars('theme_editor_directory'));
+
+/**
+ * Flag to tell files in the database to be left alone if they already exist
+ */
+define('THEME_EDITOR_IGNORE', 0);
+
+/**
+ * Flag to tell files in the database to be updated if they already exist
+ */
+define('THEME_EDITOR_UPDATE', 0);
+
+/**
+ * Flag to allow access to a file. Modules should return this value from hook_theme_editor_file_access() to allow access.
+ */
+define('THEME_EDITOR_FILE_ACCESS_ALLOW', 'allow');
+
+/**
+ * Flag to deny access to a file. Modules should return this value from hook_theme_editor_file_access() to deny access.
+ */
+define('THEME_EDITOR_FILE_ACCESS_DENY', 'deny');
+
+/**
+ * Flag to ignore a file. Modules should return this value from hook_theme_editor_file_access() to not affect file access.
+ */
+define('THEME_EDITOR_FILE_ACCESS_IGNORE', 'ignore');
+
+/**
+ * Implements hook_menu().
+ */
+function theme_editor_menu() {
+  $items['admin/appearance/editor'] = array(
+    'title' => 'Editor',
+    'page callback' => 'theme_editor_list',
+    'access argument' => array('access_theme_editor'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'theme_editor.pages.inc',
+  );
+  $items['admin/appearance/editor/settings'] = array(
+    'title' => 'Theme Editor Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('theme_editor_settings'),
+    'access arguments' => array('configure_theme_editor'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'theme_editor.admin.inc',
+    'tab_parent' => 'admin/appearance/settings',
+    'weight' => 9999,
+  );
+  $items['admin/appearance/editor/theme/%theme_editor'] = array(
+    'page callback' => 'theme_editor_editor',
+    'page arguments' => array(4),
+    'access callback' => 'theme_editor_access_theme',
+    'access arguments' => array('edit', 4),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'theme_editor.pages.inc',
+    'tab_parent' => 'admin/appearance/editor',
+  );
+  $items['admin/appearance/editor/theme/%theme_editor/%theme_editor_file'] = array(
+    'page callback' => 'theme_editor_editor',
+    'page arguments' => array(4, 5),
+    'access callback' => 'theme_editor_access',
+    'access arguments' => array(5, 'edit'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'theme_editor.pages.inc',
+    'tab_parent' => 'admin/appearance/editor',
+  );
+  $items['admin/appearance/editor/theme/%theme_editor/file_actions/%theme_editor_passthrough'] = array(
+    'page callback' => 'theme_editor_file_actions',
+    'page arguments' => array(4, 6),
+    'access callback' => 'theme_editor_access_theme',
+    'access arguments' => array('action_', 4, NULL, 6),
+    'type' => MENU_CALLBACK,
+    'file' => 'theme_editor.actions.inc',
+  );
+  $items['admin/appearance/editor/toggle/%theme_editor/%theme_editor_passthrough'] = array(
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('theme_editor_toggle', 4, 5),
+    'access callback' => 'theme_editor_access_theme',
+    'access arguments' => array('toggle_', 4, NULL, 5),
+    'type' => MENU_CALLBACK,
+    'file' => 'theme_editor.admin.inc',
+  );
+  
+  $items['user/autocomplete_multiple'] = array(
+    'title' => 'User autocomplete',
+    'page callback' => 'user_autocomplete_multiple',
+    'access callback' => 'user_access',
+    'access arguments' => array('access user profiles'),
+    'type' => MENU_CALLBACK,
+    'file' => 'theme_editor.access.inc',
+  );
+  return $items;
+}
+
+/**
+ * Loading function for themes.
+ * 
+ * @param $theme
+ *   The basename of the Theme.
+ * 
+ * @return
+ *   The fully loaded theme object or FALSE if the theme doesn't exist or is hidden
+ */
+function theme_editor_load($theme = NULL) {
+  $themes = list_themes();
+  if(!empty($themes[$theme]) && empty($themes[$theme]->info['hidden'])) {
+    return $themes[$theme];
+  }
+  
+  return FALSE; 
+}
+
+/**
+ * Passtrough function for menu wildcards. Used for instances where anynumber of items could be passed in.
+ * 
+ * @param $value
+ *   Whatever value is passed via the loader
+ * 
+ * @return
+ *   The raw value passed in.
+ */
+function theme_editor_passthrough_load($value) {
+  return $value;
+}
+
+/**
+ * Loads the file object either from the database or from the filesystem
+ * 
+ * @param $fid
+ *   the unique File ID of the file
+ * 
+ * @param $vid
+ *   (optional) The version ID of the specified file
+ */
+function theme_editor_file_load($fid, $vid = NULL) {
+  $query = db_select('theme_editor_files', 'f');
+  $query->condition('f.fid', $fid, '=');
+  $query->range(0,1);
+  $query->fields('f');
+  if ($vid) {
+    $query->join('theme_editor_files_versions', 'v', 'f.fid = v.fid AND v.vid = :vid', array(':vid' => $vid));
+    
+  }
+  else {
+    $query->join('theme_editor_files_versions', 'v', 'f.fid = v.fid AND f.vid = v.vid');
+  }
+  $query->fields('v');
+  $file = $query->execute()->fetch();
+  module_invoke_all('theme_editor_fileapi', 'load', $file);
+  return $file;
+}
+
+/**
+* Implements hook_permission().
+*/
+function theme_editor_permission() { 
+  $permissions = array(
+    'access_theme_editor' => array(
+      'title' => t('Access Theme Editor (Global)'),
+      'description' => t('Access the Theme Editor for all themes. Can still be blocked by file permissions.'),
+    ),
+    'configure_theme_editor' => array(
+      'title' => t('Configure Theme Editor Settings'),
+      'description' => t('Configure the global settings and file permissions for Theme Editor and all themes.'),
+    ),
+    'bypass_theme_editor_file_access' => array(
+      'title' => t('Bypass Theme Editor access permissions'),
+      'description' => t('Bypass access permissions for all files and themes.'),
+    ),
+  );
+  $themes = list_themes();
+  //Case insensitive sort of the array keys
+  uksort($themes, "strnatcasecmp");
+  foreach ($themes as $theme) {
+    if(empty($theme->info['hidden'])) {
+      $permissions['access_' . $theme->name . '_theme_editor'] = array(
+        'title' => t('Access the !theme Theme Editor', array('!theme' => $theme->info['name'])),
+        'description' => t('Access the Theme Editor for the !theme theme.', array('!theme' => $theme->info['name'])),
+      );
+      $permissions['configure_' . $theme->name . '_theme_editor'] = array(
+        'title' => t('Configure the !theme Theme Editor Settings', array('!theme' => $theme->info['name'])),
+        'description' => t('Configure the settings and file permissions for the !theme Theme Editor.', array('!theme' => $theme->info['name'])),
+      );
+    }
+  }
+  return $permissions;
+}
+
+/**
+ * Implementation of hook_system_themes_page_alter
+ */
+function theme_editor_system_themes_page_alter(&$theme_groups) {
+  static $themes;  
+  if(!$themes) {
+    $themes = _theme_editor_get_themes();
+  }  
+  foreach ($theme_groups as $state => &$group) {
+    foreach ($theme_groups[$state] as &$theme) {
+      if (theme_editor_access_theme('edit', $theme)) {
+        // Add an edit link to each list of theme operations.
+        $theme->operations[] = array(
+          'title' => t('Editor'), 
+          'href' => 'admin/appearance/editor/theme/' . $theme->name,
+          );
+        //Add an Enable/Disable Editor changes link
+        if(!empty($themes[$theme->name])) {
+          $status = $themes[$theme->name]->status ? 'Disable' : 'Enable';
+          $theme->operations[] = array(
+            'title' => t('!status Editor Changes', array('!status' => $status)), 
+            'href' => 'admin/appearance/editor/toggle/' . $theme->name . '/' . $status,
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
+* Implements hook_theme().
+*/
+function theme_editor_theme() { 
+  return array(
+    'theme_editor_file_actions_revert_table' => array(
+      'render element' => 'form',
+      'file' => 'theme/theme.inc',
+    ),
+    'theme_editor_file_info' => array(
+      'variables' => array('file' => NULL, 'options' => array()),
+      'file' => 'theme/theme.inc',
+    ),
+    'theme_editor_file_info_element' => array(
+      'variables' => array('out' => NULL, 'options' => array()),
+      'file' => 'theme/theme.inc',
+    ),
+    'theme_editor_file_access_table' => array(
+      'render element' => 'form',
+      'file' => 'theme_editor.access.inc'
+    ),
+    'theme_editor_file_access_form' => array(
+      'template' => 'theme-editor-file-access-form',
+      'file' => 'theme_editor.admin.inc',
+      'render element' => 'form',
+    ),
+  );
+}
+
+/**
+* Implements hook_cron().
+*/
+function theme_editor_cron() { 
+  //Placeholder for the moment. I'll come back to this when I'm close to done.
+}
+
+/**
+ * Determines weather or not a user has access to the theme or file
+ */
+function theme_editor_access($file, $op, $account = NULL) {
+  global $user;
+  
+  $mime = NULL;
+  $rights = &drupal_static(__FUNCTION__, array());
+  if (!$file || (!empty($file->fid) && !in_array($op, array('edit', 'delete', 'create'), TRUE))) {
+    // If there was no file to check against, or the $op was not one of the
+    // supported ones for a file with a fid, we return access denied.
+    // Other wise this a theme and the op coulde be rather diverse
+    return FALSE;
+  }
+  // If no user object is supplied, the access check is for the current user.
+  if (empty($account)) {
+    $account = $user;
+  }
+  if(isset($file->mime)) {
+    $mime = '__' . $file->mime; 
+  }
+  //if the fid is empty then we are working with a new file or just a theme.
+  //In which case we need to use the theme and mime as a $cid for access permissions.
+  $cid = empty($file->fid) ? $file->theme . $mime : $file->fid;
+
+  //First we are going to check against the current rights cache for this file
+  // and if it has already been checked then we'll return that value.
+  if (isset($rights[$account->uid][$cid][$op])) {
+    return $rights[$account->uid][$cid][$op];
+  }
+  //if the user has bypass permissions give them access no matter what.
+  if (user_access('bypass_theme_editor_file_access', $account)) {
+    $rights[$account->uid][$cid][$op] = TRUE;
+    return TRUE;
+  }
+  //If they don't even have permission to access the theme editor at all then deny it.
+  if (!user_access('access_theme_editor', $account) && !user_access('access_' . $file->theme . '_theme_editor', $account)) {
+    $rights[$account->uid][$cid][$op] = FALSE;
+    return FALSE;
+  }
+  
+  // We grant access to the file if both of the following conditions are met:
+  // - No modules say to deny access.
+  // - At least one module says to grant access.
+  // If no module specified either allow or deny, we fall back to the
+  // theme_editor_file_access table.
+  $access = module_invoke_all('theme_editor_access_records', $file, $op, $account);
+  if (in_array(THEME_EDITOR_FILE_ACCESS_DENY, $access, TRUE)) {
+    $rights[$account->uid][$cid][$op] = FALSE;
+    return FALSE;
+  }
+  elseif (in_array(THEME_EDITOR_FILE_ACCESS_ALLOW, $access, TRUE)) {
+    $rights[$account->uid][$cid][$op] = TRUE;
+    return TRUE;
+  }
+  
+  // If the module did not override the access rights, use those set in the
+  // theme_editor_access table.
+  if ($op != 'create' && $file->fid) {
+    if (module_implements('theme_editor_grants')) {
+      $query = db_select('theme_editor_access');
+      $query->addExpression('1');
+      $query->condition('grant_' . $op, 1, '>=');
+      $nids = db_or()->condition('fid', $node->nid);
+      if ($node->status) {
+        $nids->condition('fid', 0);
+      }
+      $query->condition($nids);
+      $query->range(0, 1);
+
+      $grants = db_or();
+      foreach (theme_editor_access_grants($op, $account) as $realm => $gids) {
+        foreach ($gids as $gid) {
+          $grants->condition(db_and()
+            ->condition('gid', $gid)
+            ->condition('realm', $realm)
+          );
+        }
+      }
+      if (count($grants) > 0) {
+        $query->condition($grants);
+      }
+      $result =  (bool) $query
+        ->execute()
+        ->fetchField();
+      $rights[$account->uid][$cid][$op] = $result;
+      return $result;
+    }
+    elseif (is_object($file)) {
+      // If no modules implement hook_theme_editor_grants(), then the default behavior
+      //is to allow all users to edit files.
+      $rights[$account->uid][$cid][$op] = TRUE;
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Provides access to the theme_editor menu items
+ * 
+ * @param $theme
+ *   The fully loaded $theme object
+ * 
+ * @param $file
+ *   The Filename being viewed
+ * 
+ * @return
+ *   True if the user has access to the theme and/or file. False if not.
+ */
+function theme_editor_access_theme($op, $theme = NULL, $file = NULL, $op_add = NULL) {
+  $op .= $op_add;
+  if (!$file) {
+    $file->theme = $theme->name;
+  }
+  return theme_editor_access($file, $op);
+}
+
+/**
+ * Implements hook_theme_editor_access_records().
+ *
+ * All theme_editor access modules must implement this hook. If the module is
+ * interested in the privacy of the file passed in, return a list
+ * of file access values for each grant ID we offer.
+ */
+function theme_editor_theme_editor_access_records($file, $op, $account) {
+  module_load_include('inc', 'theme_editor', 'theme_editor.access');
+  return _theme_editor_access_records($file, $op, $account);
+}
+
+/**
+ * Implements hook_system_info_alter().
+ * 
+ * @param $file
+ *   Is modified with an & to make it passed by reference so we can hook into it and modify it's location
+ *   to the location of the overwritten theme we have developed.
+ */
+function theme_editor_system_info_alter(&$info, &$file, $type) {
+  static $themes;  
+  if(!$themes) {
+    $themes = _theme_editor_get_themes();
+  }  
+  if (!empty($themes[$file->name]) && $themes[$file->name]->status && THEME_EDITOR_DIR) {
+    $filename = array_pop(explode('/',$file->uri));
+    $file->uri = THEME_EDITOR_DIR . '/' . $file->name . '/' . $filename;
+    $file->filename = $file->uri;
+  }
+  if($type = 'theme') {
+  $status = !empty($themes[$file->name]) ? $themes[$file->name]->status : 0;
+  $info['theme_editor'] = array(
+      'uri' => $file->uri,
+      'filename' => $file->filename,
+      'name' => $file->name,
+      'status' => $status
+    );
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function theme_editor_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'theme_editor') . '/views',
+  );
+}
+
+/**
+ * Implements hook_file_mimetype_mapping_alter()
+ */
+function theme_editor_file_mimetype_mapping_alter(&$map) {
+  $map['extensions']['inc'] = 122;
+  $map['extensions']['info'] = 292;
+}
+
+/**
+ * Gets the themes to which Theme Editor currently has copies of, both active and inactive.
+ * 
+ * @return
+ *   An array of themes keyed on the theme basename
+ */
+function _theme_editor_get_themes() {
+  return db_query('SELECT * FROM {theme_editor_themes}')
+    ->fetchAllAssoc('name');
+}
+
+/**
+ * Toggles Theme Editor changes off and on.
+ * 
+ * @param $theme
+ *   The theme object fom list_themes
+ * 
+ * @param $switch
+ *   Either Disable or Enable
+ */
+function _theme_editor_toggle($theme, $switch = 'disable') {
+  $status = array('disable' => 0, 'enable' => 1);
+  $up = db_update('theme_editor_themes')
+    ->fields(array(
+      'status' => $status[strtolower($switch)],
+    ))
+    ->condition('name', $theme->name)
+    ->execute();
+ 
+  module_invoke_all('theme_editor_theme_toggle', strtolower($switch), $theme);
+  return $up;  
+}
+
+/**
+ * Rebuilds the system theme data and clears the theme cache.
+ * Rebuilding the theme data forces a call of theme_editor_system_info_alter which is where the magic happens.
+ */
+function _theme_editor_rebuild_theme_data() {
+  //Rebuilds the theme data for DB strorage
+  system_rebuild_theme_data();
+  //nukes the theme_registry so it must rebuild.
+  drupal_theme_rebuild();
+}
+
+/**
+ * Checks that the Theme Editor requirements are set up correctly.
+ * 
+ * @return
+ *   TRUE if everything is ok. FALSE if there are requirements missing.
+ */
+function theme_editor_req_check() {
+  if (!THEME_EDITOR_DIR) {
+    drupal_set_message('Theme Editor\'s is missing some requirements! Please visit the ' . l('status report', 'admin/reports/status') . ' page for more info.', 'error');
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Builds the required database entries and copies a theme folder
+ * This function should only be called once per theme.
+ * 
+ * @param $theme
+ *   the theme object
+ */
+function _theme_editor_build_theme($theme) {
+  //Just a check to ensure that we aren't trying call this anywhere without the requirements
+  if(!theme_editor_req_check()) {
+    return FALSE;
+  }
+  
+  $path_excludes = array();
+  $files = file_scan_directory(dirname($theme->filename), '/.$/', array('key' => 'filename'));
+  
+  foreach($files as $key => $file) {
+    unset($file->name);
+    //We need to iterate through and make sure there are no sub-themes inside this folder
+    $theme_file_parts = explode('/', dirname($theme->filename));
+    $file_parts = explode('/', $file->uri);
+    //get the Files basename;
+    $name = array_pop($file_parts);
+    $file->name = empty($file->name) ? $name : $file->name;
+    foreach ($theme_file_parts as $k => $p) {
+      if ($file_parts[$k] === $p) {
+        unset($file_parts[$k]);
+      }
+    }
+    $file->path = implode('/', $file_parts);
+    if ((pathinfo($file->uri, PATHINFO_EXTENSION) == 'info') && ($file->uri != $theme->filename)) {
+      //if the file is an .info file as long as it's not the theme we are using .info file then exclude it's path
+      $path_excludes[] = $file->path;
+    }
+    $files[$key] = $file;
+  }
+  foreach ($files as $file) {
+    $break = FALSE;
+    //First we need to exclude any files under a subtheme
+    foreach ($path_excludes as $path) {
+      $pos = strpos($file->path . '/', $path . '/');
+      if ($pos === 0) {
+        //if the $path is in the file path, at the start position pass over this file
+        //We add the /'s to make sure that we don't get a flase posititve,
+        //ex: strpos(foo/bar1,foo/bar) would return true even though it's not
+        //strpos(foo/bar1/, foo/bar/) would not return true
+        $break = TRUE;
+      }
+    }
+    if ($break == TRUE) {
+      continue;
+    }
+    //Do a little modification on the $file before we process it.
+    $file->filename = $file->uri;
+    module_invoke_all('theme_editor_fileapi', 'theme build', $file, $theme);
+    theme_editor_file_process($file, $theme, array('revision' => TRUE, 'exists' => THEME_EDITOR_IGNORE));
+    $files[$file->name] = $file;    
+  }
+  
+  $theme_record = array(
+    'name' => $theme->name,
+    'status' => 0,
+  );
+  $copy = theme_editor_clone_theme($theme);
+  drupal_write_record('theme_editor_themes', $theme_record);
+  
+  db_update('theme_editor_files')
+   ->fields(array(
+    'status' => 1,
+   ))
+   ->condition('theme', $theme->name)
+   ->execute();
+}
+
+/**
+ * Processes a theme file and inserts/updates it in the database
+ * 
+ * @param $file
+ *   A file object. At a minimum it should contain the filename.
+ * 
+ * @param $theme
+ *   The theme object the file belongs to.
+ * 
+ * @param $revision
+ *   Flag to determine whether or not the revision is updated (FALSE) or a new
+ *   one is created (TRUE).
+ * 
+ * @param $if_exists
+ *   A Flag that defines the action to take if the file already exist in the database.
+ *   Use THEME_EDITOR_UPDATE to update the file and THEME_EDITOR_IGNORE to ignore the DB update.
+ */
+function theme_editor_file_process(&$file, $theme, $flags = array()) {
+  global $user;
+  //Set defaults for the flags
+  $flags += array(
+    'revision' => TRUE,
+    'exists' => THEME_EDITOR_UPDATE,
+    'filesystem' => TRUE,
+  );
+
+  module_invoke_all('theme_editor_fileapi', 'preprocess', $file, $theme, $flags);
+  $is_new = FALSE;
+  $file->changed = REQUEST_TIME;
+  //We need to build the file object for insertion into the db and for a possible revision
+  if (empty($file->fid)) {
+    module_invoke_all('theme_editor_fileapi', 'preprocess_new', $file, $theme, $flags);
+    $is_new = TRUE;
+    if (!isset($file->path)) {
+      $theme_file_parts = explode('/', dirname($theme->filename));
+      $file_parts = explode('/', $file->filename);
+      //get the Files basename;
+      $name = array_pop($file_parts);
+      $file->name = empty($file->name) ? $name : $file->name;
+      foreach ($theme_file_parts as $k => $p) {
+        if ($file_parts[$k] === $p) {
+          unset($file_parts[$k]);
+        }
+      }
+      $file->path = implode('/', $file_parts);
+    }
+    $file->theme = $theme->name;
+    $file->mime = empty($file->mime) ? file_get_mimetype($file->name) : $file->mime;
+    if (!isset($file->data)) {
+      if (!preg_match('/^((?!text\/).)*$/', $file->mime) || preg_match('/^(.)*\/(x-[httpd\-php|javascript]).*$/', $file->mime) && !isset($file->data)) {
+        $file->data = file_get_contents($file->filename);
+        $file->base64 = 0;
+      }
+      else {
+        $file->data = base64_encode(file_get_contents($file->filename));
+        $file->base64 = 1;
+      }
+    }
+    $query = db_select('theme_editor_files', 'f')
+      ->fields('f', array('fid', 'vid'));
+    $schema = drupal_get_schema('theme_editor_files');
+    foreach ($file as $field => $value) {
+      if (isset($schema[$field])) {
+        $query->condition($field, $value, '=');
+      }
+    }
+    $file_exists = $query->execute();
+    if ($file_exists) {
+      $file->fid = $file_exists->fetchField(0);
+      $file->vid = $file_exists->fetchField(1);
+      $is_new = !$file->fid;
+    }
+  }
+  if (!$is_new && $flags['exists'] == THEME_EDITOR_UPDATE) {
+    module_invoke_all('theme_editor_fileapi', 'update', $file, $flags);
+    theme_editor_file_save_revision($file, $flags);
+    module_invoke_all('theme_editor_fileapi', 'post update', $file, $flags);
+  }
+  else {
+    $file->created = $file->changed;
+    $file->uid = $user->uid;
+    module_invoke_all('theme_editor_fileapi', 'insert', $file, $flags);
+    drupal_write_record('theme_editor_files', $file);
+    module_invoke_all('theme_editor_fileapi', 'post insert', $file, $flags);
+    theme_editor_file_save_revision($file, $flags);
+  }    
+}
+
+/**
+ * Saves a revision of a theme editor file.
+ * This function should be called via theme_editor_file_process and not on its own. As it will skip a lot of the
+ * theme_editor_fileapi calls if called on it's own.
+ * 
+ * @param $file
+ *   The file object
+ * 
+ * @param $flags
+ *   Flags to determine whether or not the revision is updated (FALSE) or a new
+ *   one is created (TRUE).
+ */
+function theme_editor_file_save_revision(&$file, $flags) {
+  global $user;
+  $vid = 'vid';
+  if (!empty($flags['revision'])) {
+    //if we are inserting a new revision then we must pass an empty array as the key
+    $vid = array();
+    //We must also unset the $file->vid to keep the insert from failing
+    unset($file->vid);
+  }
+  $file->timestamp = REQUEST_TIME;
+  $file->uid = $user->uid;
+  module_invoke_all('theme_editor_fileapi', 'prerevision', $file, $flags);
+  drupal_write_record('theme_editor_files_versions', $file, $vid);
+  
+  $file->changed = $file->timestamp;
+  //rewrite it back to the files table with the updated vid and kill uid so we don't overwrite the original
+  unset($file->uid);
+  drupal_write_record('theme_editor_files', $file, 'fid');
+  module_invoke_all('theme_editor_fileapi', 'post revision', $file);
+  
+  if($flags['filesystem'] == TRUE) {
+    $dir = THEME_EDITOR_DIR . '/' . $file->theme . '/' . $file->path;
+  
+    file_prepare_directory($dir, FILE_CREATE_DIRECTORY);
+    $data = $file->data;
+    if ($file->base64) {
+      $data = base64_decode($data);
+    }
+    module_invoke_all('theme_editor_fileapi', 'prewrite', $file, $data);
+    file_put_contents($dir . '/' . $file->name, $data);
+    
+    //ensure that the status is correctly set.
+    $file->status = 1;
+    drupal_write_record('theme_editor_files', $file, array('fid'));
+    module_invoke_all('theme_editor_fileapi', 'post write', $file);
+  }
+}
+
+/**
+ * Reverts a file to an earlier revision.
+ * 
+ * @param $file
+ *   The File object.
+ * 
+ * @param $vid
+ *   The version ID the file will be reverted to.
+ */
+function theme_editor_file_revert($file, $vid) {
+  if ($file->vid == $vid) {
+    //this is the current version return without doing anything.
+    return;
+  }
+  $old_version = theme_editor_file_load($file->fid, $vid);
+  $theme = theme_editor_load($file->theme);
+  module_invoke_all('theme_editor_fileapi', 'prerevert', $file, $old_version);
+  $file = $old_version;
+  theme_editor_file_process($file, $theme);
+}
+
+/**
+ * Deletes a file from the filesystem or database
+ * 
+ * @param $file
+ *   The file object
+ * 
+ * @param $scope
+ *   The scope from which to delete the file. Options are filesystem, database, or all.
+ */
+function theme_editor_file_delete(&$file, $scope = 'all') {
+  if(!theme_editor_access($file, 'delete')) {
+    drupal_access_denied();
+  }
+  //Run it through hook_theme_editor_fileapi prior to deleteing the file
+  //This gives modules a chance to stop the file deletion process
+  //or run it htrough thier own custom scopes.
+  module_invoke_all('theme_editor_fileapi', 'delete', $file, $scope);
+  if ($scope == 'filesystem' || $scope == 'all') {
+    $dir = THEME_EDITOR_DIR . '/' . $file->theme . '/';
+    $filename = empty($file->path) ? $file->name : $file->path . '/' . $file->name;
+    $status = drupal_unlink($dir . $filename);
+    if ($status) {
+      $file->status = 0;
+      drupal_write_record('theme_editor_files', $file, 'fid');
+    }
+  }
+  if ($scope == 'database' || $scope == 'all') {
+    $deleted = db_delete('theme_editor_files')
+      ->condition('fid', $file->fid)
+      ->execute();
+    $vers_deleted = db_delete('theme_editor_files_versions')
+      ->condition('fid', $file->fid)
+      ->execute();
+    if($vers_deleted > 0 && $deleted > 0) {
+      reset($file);
+      $file->deleted = TRUE;
+    }
+  }
+}  
+
+/**
+ * Clones a theme to the theme editor directory.
+ */
+function theme_editor_clone_theme($theme) {
+  $source = dirname($theme->filename);
+  $destination = THEME_EDITOR_DIR . '/' . $theme->name;
+  recurse_copy($source, $destination);
+}
+
+/**
+ * Specialized function to copy directories recusively
+ */
+function recurse_copy($src,$dst) {
+    $dir = opendir($src);
+    @mkdir($dst);
+    while(false !== ($file = readdir($dir))) {
+        if (( $file != '.' ) && (!preg_match('/(\.\.?|CVS)$/', $file))) {
+            if (is_dir($src . '/' . $file)) {
+                recurse_copy($src . '/' . $file,$dst . '/' . $file);
+            }
+            else {
+                copy($src . '/' . $file,$dst . '/' . $file);
+            }
+        }
+    }
+    closedir($dir);
+}
+
+/**
+ * Renders a human readable Mime Type
+ * 
+ * @param $value
+ *   The value to render into a human readable format
+ * 
+ * @return
+ *   The human readable file type or an attempt to make the machine type human readable
+ */
+function theme_editor_mime_type_render($value) {
+  $types = theme_editor_mime_types();  
+  return empty($types[$value]) ? t('Unsupported Mime Type') : $types[$value];
+}
+
+/**
+ * Gets the list of available mime_types
+ */
+function theme_editor_mime_types() {
+  $types = &drupal_static(__FUNCTION__, array());
+  if (!$types) {
+  //Invoke all mime types that are available in modules or themes
+  $types = module_invoke_all('theme_editor_mime_types');
+  //allow modules a chance to alter other mime types
+  drupal_alter('theme_editor_mime_types', $types);
+  }
+  return $types;
+}
+ 
+/**
+* Implements hook_theme_editor_mime_types().
+*/
+function theme_editor_theme_editor_mime_types() { 
+  return array(
+    'image/png' => 'PNG',
+    'image/jpg' => 'JPG',
+    'image/gif' => 'GIF',
+    'application/x-javascript' => 'JavaScript',
+    'application/x-httpd-php' => 'PHP',
+    'text/css' => 'CSS',
+    'text/html' => 'HTML',
+    'text/plain' => 'TEXT',  
+  );
+}
+
+/**
+ * Adds any relevent files to the theme editor interface
+ */
+function _theme_editor_add_files() {
+  $path = drupal_get_path('module', 'theme_editor');
+  drupal_add_js($path . '/js/theme_editor.js');
+}
+
+/**
+ * Get all actions defined in hook_theme_editor_file_actions_info()
+ */
+function theme_editor_get_file_actions() {
+  $actions = &drupal_static(__FUNCTION__, array());
+  if(!$actions) {
+    $hook = 'theme_editor_file_actions_info';
+    foreach (module_implements($hook)  as $module) {
+      $func = $module . '_' . $hook;
+      $module_actions = call_user_func($func);
+      foreach ($module_actions as $name => $action) {
+        $action['module'] = $module;
+        $actions[$name] = $action; 
+      }    
+    }
+    //Give modules a chance to alter the actions.
+    drupal_alter($hook, $actions);
+  }
+  return $actions;
+}
+/**
+* Implements hook_theme_editor_file_actions_info().
+*/
+function theme_editor_theme_editor_file_actions_info() { 
+  return array(
+    'add_file' => array(
+      'title' => t('Add File'),
+      'description' => t('Add a text based file (CSS, JS, PHP) to a theme.'),
+      'callback' => 'theme_editor_file_actions_add',
+      'scope' => 'theme',
+      'file' => 'includes/theme_editor.file_actions_theme.inc',
+    ),
+    'upload_file' => array(
+      'title' => t('Upload File'),
+      'description' => t('Upload an existing file or image to a theme.'),
+      'callback' => 'theme_editor_file_actions_upload',
+      'scope' => 'theme',
+      'file' => 'includes/theme_editor.file_actions_theme.inc',
+    ),
+    'delete_file' => array(
+      'title' => t('Delete File'),
+      'description' => t('Delete the current file from the system or database.'),
+      'callback' => 'theme_editor_file_actions_delete',
+      'scope' => 'file',
+      'file' => 'includes/theme_editor.file_actions_file.inc',
+    ),
+    'revert_file' => array(
+      'title' => t('Revert File'),
+      'description' => t('Revert the current file to previous version.'),
+      'callback' => 'theme_editor_file_actions_revert',
+      'scope' => 'file',
+      'file' => 'includes/theme_editor.file_actions_file.inc',
+    ),
+    'delete_revision' => array(
+      'title' => t('Delete Revision'),
+      'description' => t('Delete a specific revision from the database.'),
+      'callback' => 'theme_editor_file_actions_delete_revision',
+      'scope' => 'version',
+      'hide' => TRUE,
+      'file' => 'includes/theme_editor.file_actions_version.inc',
+    ),
+    'revert_revision' => array(
+      'title' => t('Revert Revision'),
+      'description' => t('Revert to a specific revision from the database.'),
+      'callback' => 'theme_editor_file_actions_revert_revision',
+      'scope' => 'version',
+      'hide' => TRUE,
+      'file' => 'includes/theme_editor.file_actions_version.inc',
+    ),
+  );
+}
+
+/**
+ * Builds a path for either the theme or file.
+ * This is a utility function whose primary use is within the module to reduce retyping the path
+ * to theme and file editors repeatedly.
+ * 
+ * @param $obj
+ *   Either a theme or file object
+ * 
+ * @param $type
+ *   Either 'theme' or 'file' depending on the $obj type
+ * 
+ * @return
+ *   A fully built path to the theme or file editor page.
+ */
+function _tep($obj, $type) {
+  switch ($type) {
+    case 'theme':
+      return 'admin/appearance/editor/theme/' . $obj->name;
+    break;
+    case 'file':
+      return 'admin/appearance/editor/theme/' . $obj->theme . '/' . $obj->fid;  
+    break;
+  }
+}
+
+/**
+ * Utility function to remove a directory recursively. Mainly used during uninstall and file deletion.
+ * This function will also clean up any empty directories.
+ * 
+ * @param $dir
+ *   The directory to remove
+ * 
+ * @param $empty
+ *   Flag for what to do if the directory is not empty. FALSE keeps the directory from being removed if there are files.
+ *   TRUE will remove the directory even if there are files. So if you would like to remove a non-empty directory you must explicitly
+ *   set this flag to TRUE.
+ */
+function theme_editor_rmdir($dir, $empty = FALSE) {
+  $not_empty = NULL;
+   if (is_dir($dir)) { 
+     $objects = scandir($dir); 
+     foreach ($objects as $object) { 
+       if ($object != "." && $object != "..") { 
+         if (is_dir($dir."/".$object)) {
+           theme_editor_rmdir($dir."/".$object, $empty);
+         }
+         elseif (!$empty) {
+           $not_empty = TRUE;
+         }
+         else {
+           drupal_unlink($dir."/".$object);
+         }
+       } 
+     } 
+     reset($objects);
+     if (!$not_empty) {
+       drupal_rmdir($dir);
+     }
+   } 
+ } 
+ 
+/**
+ * Returns a structured array of the various theme_editor varibales stored in the variable table
+ * Keeps the values stored in one place that way there is no need to call additional default values everytime variable_get is called
+ */
+function _te_vars($name) {
+  global $conf;
+  $vars = array(
+    'theme_editor_directory' => '',
+    'theme_editor_global' => array(
+      'revision' => TRUE,
+      'save_as' => 'filesystem',
+      'access' => array(),
+    ),
+  );
+  return isset($conf[$name]) ? $conf[$name] : $vars[$name];
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function theme_editor_form_system_theme_settings_alter(&$form, &$form_state) {
+  global $user;
+  $theme = isset($form_state['build_info']['args'][0]) ? $form_state['build_info']['args'][0] : NULL;
+  if ($theme && (user_access('configure_theme_editor', $user) || user_access('configure_' . $theme . '_theme_editor', $user))) {
+    //We only want to call this on the theme forms, not the global settings form. For that we have our own settings page
+    drupal_alter('theme_editor_theme_settings', $form, $form_state, $theme);
+  }
+}
+
+/**
+ * Implements hook_theme_editor_theme_settings_alter()
+ */
+function theme_editor_theme_editor_theme_settings_alter(&$form, &$form_state, $theme) {
+  //Set up some global options first; 
+  $global = theme_editor_get_theme_settings($theme);
+  $form['theme_editor'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Theme Editor Settings'),
+    '#collapsible' => TRUE,
+    '#tree' => TRUE,
+  );
+  module_load_include('inc', 'theme_editor', 'theme_editor.admin');
+  $form['theme_editor'] += theme_editor_settings_subform($form_state, $global);
+  
+  module_load_include('inc', 'theme_editor', 'theme_editor.access');
+  $form['theme_editor'] += theme_editor_settings_access_form($form_state, $theme, $global);
+  array_unshift($form['#submit'], 'theme_editor_theme_settings_submit');
+}
+
+/**
+ * Form submission handler for theme_editor_theme_settings
+ */
+function theme_editor_theme_settings_submit($form, &$form_state) {
+  module_load_include('inc', 'theme_editor', 'theme_editor.access');
+  _theme_editor_settings_access_form_submit($form, $form_state);
+}
+/**
+ * Form call back for theme editor access add form
+ */
+function theme_editor_settings_access_form_add_submit($form, &$form_state) {
+  module_load_include('inc', 'theme_editor', 'theme_editor.access');
+  _theme_editor_settings_access_form_add_submit($form, $form_state);
+}
+
+/**
+ * Form call back for theme editor access add form
+ */
+function theme_editor_settings_access_form_delete_submit($form, &$form_state) {
+  module_load_include('inc', 'theme_editor', 'theme_editor.access');
+  _theme_editor_settings_access_form_delete_submit($form, $form_state);
+}
+/**
+ * Gets the settings for each theme or if those are not present then return the global settings
+ * 
+ * @param $theme
+ *   The theme name from the system db table
+ * 
+ * @return
+ *   The themes settings if available or the flobal settings by default
+ */
+function theme_editor_get_theme_settings($theme = NULL) {
+  $global = _te_vars('theme_editor_global');
+  if ($theme) {
+    $values = theme_get_setting('theme_editor', $theme);
+    $values = is_array($values) ? $values : array();
+    $global = array_merge($global, $values);
+  }
+  return $global;
+}
+
+/**
+ * AJAX submit callback
+ */
+function theme_editor_access_ajax(&$form, &$form_state) {
+  //We need to do some processing to see which button was pressed.
+  if ($form_state['clicked_button']['#parents'][2] == '_add_' ||
+      $form_state['clicked_button']['#parents'][2] == 'perms') {
+    return $form['theme_editor']['access'];
+  }
+}
