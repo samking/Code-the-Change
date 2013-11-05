@@ -1,5 +1,5 @@
 #settings#
-settings.php
+sites/default/settings.php
 
 #mac files
 .DS_Store
